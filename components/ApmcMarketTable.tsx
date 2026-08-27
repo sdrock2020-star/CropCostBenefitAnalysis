@@ -254,7 +254,7 @@ export const ApmcMarketTable: React.FC = () => {
                     <YAxis tick={{ fontSize: 11, fill: '#78716c' }} domain={['auto', 'auto']} />
                     <Tooltip
                       contentStyle={{ backgroundColor: '#ffffff', borderRadius: '8px', border: '1px solid #e7e5e4', fontSize: '12px' }}
-                      formatter={(value: number) => [`₹ ${value.toLocaleString('en-IN')}`, '']}
+                      formatter={(value: any) => [`₹ ${Number(value || 0).toLocaleString('en-IN')}`, '']}
                     />
                     <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '8px' }} />
                     <Area type="monotone" dataKey="Modal" stroke="#15803d" strokeWidth={2.5} fillOpacity={1} fill="url(#colorModal)" />
