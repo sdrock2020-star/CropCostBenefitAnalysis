@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
-import { Search, Store, RefreshCw, X, TrendingUp, Calendar, ArrowLeft } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { Search, Store, RefreshCw, X, TrendingUp, Calendar, ArrowLeft, Layers } from 'lucide-react';
 import {
   AreaChart,
   Area,
@@ -10,7 +10,7 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  Legend
+  Legend,
 } from 'recharts';
 
 export interface ApmcRecord {
@@ -24,6 +24,7 @@ export interface ApmcRecord {
 }
 
 export const ApmcMarketTable: React.FC = () => {
+  const [selectedSource, setSelectedSource] = useState<'ogd' | 'commodityonline'>('ogd');
   const [apmcData, setApmcData] = useState<ApmcRecord[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [lastUpdated, setLastUpdated] = useState<string>('');
@@ -31,25 +32,41 @@ export const ApmcMarketTable: React.FC = () => {
   const [selectedDistrict, setSelectedDistrict] = useState('');
   const [selectedItem, setSelectedItem] = useState<ApmcRecord | null>(null);
 
-  const fetchLiveRates = async () => {
+  const fetchLiveRates = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/apmc');
+      const endpoint = selectedSource === 'ogd' ? '/api/apmc' : '/commodityonline';
+      const response = await fetch(endpoint);
       const result = await response.json();
-      if (result.records) {
+      if (result && Array.isArray(result.records)) {
         setApmcData(result.records);
         setLastUpdated(new Date().toLocaleTimeString());
+      } else {
+        setApmcData([]);
       }
     } catch (err) {
       console.error('Error fetching APMC rates:', err);
+      setApmcData([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedSource]);
 
   useEffect(() => {
     fetchLiveRates();
-  }, []);
+  }, [fetchLiveRates]);
+
+  // Dynamically extract unique districts from the current active source data
+  const availableDistricts = useMemo(() => {
+    const districts = Array.from(
+      new Set(
+        apmcData
+          .map((item) => item.district)
+          .filter((d) => d && d !== 'N/A')
+      )
+    ).sort();
+    return districts;
+  }, [apmcData]);
 
   const filteredData = useMemo(() => {
     return apmcData.filter((item) => {
@@ -69,9 +86,7 @@ export const ApmcMarketTable: React.FC = () => {
     const baseModal = selectedItem.marketPrice;
     const baseMin = selectedItem.minPrice;
     const baseMax = selectedItem.maxPrice;
-
     const formattedDateLabel = selectedItem.date ? selectedItem.date.slice(-5) : '';
-
     return [
       { date: '28/07', Modal: Math.round(baseModal * 0.92), Min: Math.round(baseMin * 0.91), Max: Math.round(baseMax * 0.93) },
       { date: '01/08', Modal: Math.round(baseModal * 0.95), Min: Math.round(baseMin * 0.94), Max: Math.round(baseMax * 0.96) },
@@ -82,7 +97,7 @@ export const ApmcMarketTable: React.FC = () => {
   }, [selectedItem]);
 
   return (
-    <div className="bg-white/95 backdrop-blur-md rounded-2xl border border-stone-200 shadow-xl p-6">
+    <div className="relative z-10 mt-8 bg-white/95 backdrop-blur-md rounded-2xl border border-stone-200 shadow-xl p-6">
       {/* HEADER CONTROLS */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-stone-200 pb-4 mb-4">
         <div className="flex items-center gap-3">
@@ -93,13 +108,29 @@ export const ApmcMarketTable: React.FC = () => {
             </h3>
             {lastUpdated && (
               <span className="text-xs text-green-700 font-semibold block mt-0.5">
-                Live Synced via Agmarknet OGD API at {lastUpdated}
+                Live Synced via {selectedSource === 'ogd' ? 'Agmarknet OGD API' : 'Commodity Online Feed'} at {lastUpdated}
               </span>
             )}
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center flex-wrap gap-2.5">
+          {/* SOURCE SELECTION DROPDOWN */}
+          <div className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-300 rounded-lg px-2.5 py-1 text-xs">
+            <Layers className="w-3.5 h-3.5 text-emerald-800" />
+            <select
+              value={selectedSource}
+              onChange={(e) => {
+                setSelectedSource(e.target.value as 'ogd' | 'commodityonline');
+                setSelectedDistrict('');
+              }}
+              className="bg-transparent font-bold text-emerald-900 outline-none cursor-pointer text-xs md:text-sm"
+            >
+              <option value="ogd">Agmarknet (OGD)</option>
+              <option value="commodityonline">Commodity Online</option>
+            </select>
+          </div>
+
           <button
             onClick={fetchLiveRates}
             disabled={loading}
@@ -116,30 +147,27 @@ export const ApmcMarketTable: React.FC = () => {
               placeholder="Search crop or APMC..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9 pr-4 py-1.5 text-xs md:text-sm bg-stone-50 border border-stone-300 rounded-lg focus:ring-2 focus:ring-green-600 focus:border-green-600 w-48 md:w-64"
+              className="pl-9 pr-4 py-1.5 text-xs md:text-sm bg-stone-50 border border-stone-300 rounded-lg focus:ring-2 focus:ring-green-600 focus:border-green-600 w-44 md:w-56"
             />
           </div>
 
+          {/* DISTRICT SELECTION DROPDOWN */}
           <select
             value={selectedDistrict}
             onChange={(e) => setSelectedDistrict(e.target.value)}
-            className="text-xs md:text-sm bg-stone-50 border border-stone-300 rounded-lg py-1.5 px-3 font-semibold text-stone-700"
+            className="text-xs md:text-sm bg-stone-50 border border-stone-300 rounded-lg py-1.5 px-3 font-semibold text-stone-700 max-w-[140px]"
           >
             <option value="">All Districts</option>
-            <option value="Bargarh">Bargarh</option>
-            <option value="Bolangir">Bolangir</option>
-            <option value="Cuttack">Cuttack</option>
-            <option value="Dhenkanal">Dhenkanal</option>
-            <option value="Kalahandi">Kalahandi</option>
-            <option value="Mayurbhanja">Mayurbhanja</option>
-            <option value="Rayagada">Rayagada</option>
-            <option value="Sambalpur">Sambalpur</option>
-            <option value="Sundargarh">Sundargarh</option>
+            {availableDistricts.map((district) => (
+              <option key={district} value={district}>
+                {district}
+              </option>
+            ))}
           </select>
         </div>
       </div>
 
-      {/* ENLARGED MAIN DATA TABLE CONTAINER */}
+      {/* MAIN DATA TABLE CONTAINER */}
       <div className="overflow-x-auto max-h-[580px] overflow-y-auto rounded-xl border border-stone-200/80">
         <table className="w-full text-left text-xs md:text-sm border-collapse">
           <thead className="sticky top-0 bg-stone-100 text-stone-700 font-extrabold border-b border-stone-200 z-10 shadow-sm">
@@ -157,7 +185,7 @@ export const ApmcMarketTable: React.FC = () => {
             {loading ? (
               <tr>
                 <td colSpan={7} className="py-12 text-center text-stone-500 font-semibold text-sm">
-                  Fetching latest APMC market prices...
+                  Fetching latest {selectedSource === 'ogd' ? 'Agmarknet' : 'Commodity Online'} market prices...
                 </td>
               </tr>
             ) : filteredData.length > 0 ? (
@@ -183,7 +211,7 @@ export const ApmcMarketTable: React.FC = () => {
             ) : (
               <tr>
                 <td colSpan={7} className="py-10 text-center text-stone-400 italic">
-                  No matching APMC market rates found.
+                  No matching APMC market rates found for this source.
                 </td>
               </tr>
             )}
@@ -205,7 +233,6 @@ export const ApmcMarketTable: React.FC = () => {
             onClick={(e) => e.stopPropagation()}
             className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-stone-200 p-6 space-y-6 relative"
           >
-            {/* HEADER */}
             <div className="flex items-start justify-between border-b border-stone-100 pb-4 sticky top-0 bg-white z-10 pt-1">
               <div>
                 <button
@@ -230,7 +257,6 @@ export const ApmcMarketTable: React.FC = () => {
               </button>
             </div>
 
-            {/* LINE CHART */}
             <div className="bg-gradient-to-b from-green-50/60 to-white rounded-xl border border-green-200/80 p-4 space-y-2">
               <div className="flex items-center justify-between">
                 <h4 className="text-xs font-black text-green-900 uppercase tracking-wide flex items-center gap-1.5">
@@ -253,7 +279,12 @@ export const ApmcMarketTable: React.FC = () => {
                     <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#78716c' }} />
                     <YAxis tick={{ fontSize: 11, fill: '#78716c' }} domain={['auto', 'auto']} />
                     <Tooltip
-                      contentStyle={{ backgroundColor: '#ffffff', borderRadius: '8px', border: '1px solid #e7e5e4', fontSize: '12px' }}
+                      contentStyle={{
+                        backgroundColor: '#ffffff',
+                        borderRadius: '8px',
+                        border: '1px solid #e7e5e4',
+                        fontSize: '12px',
+                      }}
                       formatter={(value: any) => [`₹ ${Number(value || 0).toLocaleString('en-IN')}`, '']}
                     />
                     <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '8px' }} />
@@ -265,7 +296,6 @@ export const ApmcMarketTable: React.FC = () => {
               </div>
             </div>
 
-            {/* TABLE */}
             <div className="bg-stone-50/60 rounded-xl border border-stone-200 p-4">
               <h4 className="text-xs font-extrabold text-stone-700 uppercase tracking-wider mb-3 flex items-center gap-1.5">
                 <Calendar className="w-4 h-4 text-green-700" /> Historical Price Records
@@ -306,7 +336,7 @@ export const ApmcMarketTable: React.FC = () => {
                 className="px-5 py-2 bg-stone-800 hover:bg-stone-900 text-white font-bold text-xs md:text-sm rounded-lg transition-colors shadow-md"
               >
                 Close Trend View
-              </button>
+              </button> 
             </div>
           </div>
         </div>
@@ -315,4 +345,4 @@ export const ApmcMarketTable: React.FC = () => {
   );
 };
 
-    
+
