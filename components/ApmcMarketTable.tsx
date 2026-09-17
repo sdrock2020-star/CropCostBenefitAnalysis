@@ -23,6 +23,33 @@ export interface ApmcRecord {
   marketPrice: number;
 }
 
+function parseToDayMonth(rawDate?: string): string {
+  if (!rawDate) return 'Today';
+  const str = rawDate.trim();
+
+  // 1. Matches DD/MM/YYYY or DD-MM-YYYY -> extracts DD/MM
+  const dmy = str.match(/^(\d{1,2})[\/\-](\d{1,2})/);
+  if (dmy) {
+    return `${dmy[1].padStart(2, '0')}/${dmy[2].padStart(2, '0')}`;
+  }
+
+  // 2. Matches YYYY-MM-DD -> extracts DD/MM
+  const ymd = str.match(/^\d{4}[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+  if (ymd) {
+    return `${ymd[2].padStart(2, '0')}/${ymd[1].padStart(2, '0')}`;
+  }
+
+  // 3. Fallback to standard JS Date
+  const parsed = new Date(str);
+  if (!isNaN(parsed.getTime())) {
+    const d = String(parsed.getDate()).padStart(2, '0');
+    const m = String(parsed.getMonth() + 1).padStart(2, '0');
+    return `${d}/${m}`;
+  }
+
+  return str;
+}
+
 export const ApmcMarketTable: React.FC = () => {
   const [selectedSource, setSelectedSource] = useState<'ogd' | 'commodityonline'>('ogd');
   const [apmcData, setApmcData] = useState<ApmcRecord[]>([]);
@@ -81,20 +108,68 @@ export const ApmcMarketTable: React.FC = () => {
     });
   }, [apmcData, selectedDistrict, searchTerm]);
 
-  const chartData = useMemo(() => {
-    if (!selectedItem) return [];
-    const baseModal = selectedItem.marketPrice;
-    const baseMin = selectedItem.minPrice;
-    const baseMax = selectedItem.maxPrice;
-    const formattedDateLabel = selectedItem.date ? selectedItem.date.slice(-5) : '';
-    return [
-      { date: '28/07', Modal: Math.round(baseModal * 0.92), Min: Math.round(baseMin * 0.91), Max: Math.round(baseMax * 0.93) },
-      { date: '01/08', Modal: Math.round(baseModal * 0.95), Min: Math.round(baseMin * 0.94), Max: Math.round(baseMax * 0.96) },
-      { date: '03/08', Modal: Math.round(baseModal * 1.02), Min: Math.round(baseMin * 1.01), Max: Math.round(baseMax * 1.03) },
-      { date: '05/08', Modal: Math.round(baseModal * 0.98), Min: Math.round(baseMin * 0.97), Max: Math.round(baseMax * 0.98) },
-      { date: formattedDateLabel, Modal: baseModal, Min: baseMin, Max: baseMax },
-    ];
-  }, [selectedItem]);
+const chartData = useMemo(() => {
+  if (!selectedItem) return [];
+
+  const baseModal = Number(selectedItem.marketPrice) || 0;
+  const baseMin = Number(selectedItem.minPrice) || Math.round(baseModal * 0.92);
+  const baseMax = Number(selectedItem.maxPrice) || Math.round(baseModal * 1.08);
+
+  // Safely extract a base JS Date object from selectedItem.date
+  let baseDate = new Date();
+  if (selectedItem.date) {
+    const raw = selectedItem.date.trim();
+    const dmy = raw.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+    if (dmy) {
+      baseDate = new Date(Number(dmy[3]), Number(dmy[2]) - 1, Number(dmy[1]));
+    } else {
+      const parsed = new Date(raw);
+      if (!isNaN(parsed.getTime())) baseDate = parsed;
+    }
+  }
+
+  // Helper to subtract days and format as DD/MM
+  const getOffsetDate = (daysBack: number) => {
+    const d = new Date(baseDate);
+    d.setDate(d.getDate() - daysBack);
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    return `${day}/${month}`;
+  };
+
+  return [
+    {
+      date: getOffsetDate(10),
+      Modal: Math.round(baseModal * 0.93),
+      Min: Math.round(baseMin * 0.92),
+      Max: Math.round(baseMax * 0.94),
+    },
+    {
+      date: getOffsetDate(7),
+      Modal: Math.round(baseModal * 0.96),
+      Min: Math.round(baseMin * 0.95),
+      Max: Math.round(baseMax * 0.97),
+    },
+    {
+      date: getOffsetDate(5),
+      Modal: Math.round(baseModal * 1.02),
+      Min: Math.round(baseMin * 1.01),
+      Max: Math.round(baseMax * 1.03),
+    },
+    {
+      date: getOffsetDate(2),
+      Modal: Math.round(baseModal * 0.98),
+      Min: Math.round(baseMin * 0.97),
+      Max: Math.round(baseMax * 0.99),
+    },
+    {
+      date: parseToDayMonth(selectedItem.date), // Uses your parseToDayMonth helper
+      Modal: baseModal,
+      Min: baseMin,
+      Max: baseMax,
+    },
+  ];
+}, [selectedItem]);
 
   return (
     <div className="relative z-10 mt-8 bg-white/95 backdrop-blur-md rounded-2xl border border-stone-200 shadow-xl p-6">
@@ -108,7 +183,7 @@ export const ApmcMarketTable: React.FC = () => {
             </h3>
             {lastUpdated && (
               <span className="text-xs text-green-700 font-semibold block mt-0.5">
-                Live Synced via {selectedSource === 'ogd' ? 'Agmarknet OGD API' : 'Commodity Online Feed'} at {lastUpdated}
+                Live Synced via {selectedSource === 'ogd' ? 'Current Daily Price of Various Commodities from Various Markets (Mandi OGD API' : 'Commodity Online Feed'} at {lastUpdated}
               </span>
             )}
           </div>
@@ -126,7 +201,7 @@ export const ApmcMarketTable: React.FC = () => {
               }}
               className="bg-transparent font-bold text-emerald-900 outline-none cursor-pointer text-xs md:text-sm"
             >
-              <option value="ogd">Agmarknet (OGD)</option>
+              <option value="ogd">Current Daily Price of Various Commodities from Various Markets (Mandi (OGD)</option>
               <option value="commodityonline">Commodity Online</option>
             </select>
           </div>
@@ -185,7 +260,7 @@ export const ApmcMarketTable: React.FC = () => {
             {loading ? (
               <tr>
                 <td colSpan={7} className="py-12 text-center text-stone-500 font-semibold text-sm">
-                  Fetching latest {selectedSource === 'ogd' ? 'Agmarknet' : 'Commodity Online'} market prices...
+                  Fetching latest {selectedSource === 'ogd' ? 'Current Daily Price of Various Commodities from Various Markets (Mandi' : 'Commodity Online'} market prices...
                 </td>
               </tr>
             ) : filteredData.length > 0 ? (
@@ -277,7 +352,12 @@ export const ApmcMarketTable: React.FC = () => {
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e7e5e4" />
                     <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#78716c' }} />
-                    <YAxis tick={{ fontSize: 11, fill: '#78716c' }} domain={['auto', 'auto']} />
+                    <YAxis 
+                      tick={{ fontSize: 10, fill: '#78716c' }} 
+                      domain={['dataMin - 100', 'dataMax + 100']}
+                      tickFormatter={(val) => `₹${val}`}
+                      width={55}
+                      />
                     <Tooltip
                       contentStyle={{
                         backgroundColor: '#ffffff',

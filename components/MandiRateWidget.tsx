@@ -19,7 +19,8 @@ export const MandiRateWidget: React.FC = () => {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-      
+
+
       {/* 1. APMC Mandi Market Rate Feed Card */}
       <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 p-5">
         <div className="flex items-center justify-between border-b border-slate-200 pb-3 mb-4">
