@@ -8,16 +8,13 @@ const slideImages = [
   '/hi2.jpeg',
   '/hi3.jpeg',
   '/hi6.jpg',
-  '/hi4.jpg',
-  '/hi9.jpg',
+  '/hi5.jpg',
   '/hi11.jpeg',
   '/hi19.jpeg',
   '/hi16.jpeg',
   '/hi13.jpeg',
   '/hi12.jpeg',
-  
 ];
-
 export default function ImageSlideshow() {
   const [currentIndex, setCurrentIndex] = useState(0);
 
