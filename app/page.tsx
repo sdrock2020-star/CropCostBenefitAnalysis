@@ -179,7 +179,7 @@ export default function Home() {
                   </div>
 
                   <div className="text-[10px] text-stone-400 border-t border-stone-100 pt-2 text-right">
-                    ICAR-IIWM REWARD Project Analytics Engine
+                    ICAR-IIWM REWARD Project
                   </div>
                 </div>
               )}
